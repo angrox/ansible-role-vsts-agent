@@ -1,0 +1,41 @@
+- name: Register base install command as fact in variable install_command
+  set_fact:
+    install_command: "./config.sh --unattended --acceptteeeula --url {{vsts_server_url}} --auth PAT --token {{vsts_accesstoken}} --agent {{vsts_agent_name}} --work {{vsts_workfolder}} --replace"
+
+- name: Add agent pool to install command (default queue-agent)
+  set_fact:
+    install_command: "{{ install_command }} --pool {{ vsts_poolname }}"
+  when: vsts_poolname|default("") != "" 
+
+- name: Add proxy-url to install command
+  set_fact:
+    install_command: "{{ install_command }} --proxyurl {{ vsts_proxyurl }}"
+  when: vsts_proxyurl|default("") != ""
+
+- name: Add deployment group info to install command (deployment group agent)
+  set_fact:
+    install_command: "{{ install_command }} --projectname {{ vsts_projectname}} --deploymentgroup --deploymentgroupname {{ vsts_deploymentgroupname}} "
+  when: 
+    - vsts_deploymentgroupname|default("") != ""
+    - vsts_projectname|default("") != ""
+
+- name: Fail for conflicting options for default agent x deployment agent
+  fail:
+    msg: "The vsts_poolname({{ vsts_poolname }}) and vsts_deploymentgroupname({{ vsts_deploymentgroupname }}) vars are present at same time, choose one of them to install the default queue/build agent or the deployment group agent."
+  when:
+    - vsts_poolname|default("") != ""
+    - vsts_deploymentgroupname|default("") != ""
+
+- name: Fail for missing parameters in install command
+  fail:
+    msg: "Neither the vsts_poolname({{ AGENT_POOL }}) or the vsts_deploymentgroupname({{ vsts_deploymentgroupname }}) vars are present, choose one of them to install the default queue/build agent or the deployment group agent."
+  when:
+    - vsts_poolname|default("") == ""
+    - vsts_deploymentgroupname|default("") == ""
+
+- name: Configure vsts-agent
+  command: "{{ install_command }}"
+  args:
+    chdir: "{{vsts_agentfolder}}"
+    creates: "{{vsts_agentfolder}}/.agent"
+  become_user: "{{vsts_agent_user}}"

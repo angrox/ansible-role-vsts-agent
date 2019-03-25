@@ -1,0 +1,47 @@
+---
+    - name: Install required software for vsts-agent
+      apt:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - python-pip
+        - python-pexpect
+        - libcurl4-gnutls-dev
+      become: true
+
+    - name: Pip install pexpect (we need a new-enough version that isn't packaged in ubuntu and debian
+      pip:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - pexpect 
+
+    - name: Installation dependencies
+      command: "./bin/installdependencies.sh"
+      args:
+        chdir: "{{ vsts_agentfolder }}"
+        creates: "/etc/systemd/system/vsts.agent.{{ vsts_accountname }}.{{ vsts_agent_name }}.service"
+      become: true
+      when: dryrun is not defined        
+
+    - name: Include configure vsts-agent tasks
+      include_tasks: configure_vsts_agent.yml
+      when: dryrun is not defined 
+
+    - name: Initial installation of systemd service files and generation of runsvc.sh
+      command: "./svc.sh install {{ vsts_agent_user }}"
+      args:
+        chdir: "{{ vsts_agentfolder }}"
+        creates: "/etc/systemd/system/vsts.agent.{{ vsts_accountname }}.{{ vsts_agent_name }}.service"
+      become: true
+      when: dryrun is not defined
+
+    - name: Enable and start vsts-agent service
+      service:
+        name: "vsts.agent.{{ vsts_accountname }}.{{ vsts_agent_name }}"
+        enabled: yes
+        state: started
+      become: true
+      when: dryrun is not defined
+      tags:
+        - service

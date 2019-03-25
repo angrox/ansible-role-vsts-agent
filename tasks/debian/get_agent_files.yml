@@ -1,0 +1,36 @@
+---    
+    - name: create "{{ vsts_agent_user }}" user for running the app
+      user:
+        name: "{{ vsts_agent_user }}"
+        groups: admin
+
+    - name: Create directories
+      file:
+        state: directory
+        path: "{{item}}"
+        owner: "{{vsts_agent_user}}"
+        group: "{{vsts_agent_user}}"
+        mode: 0755
+      with_items:
+        - "{{vsts_agentfolder}}"
+        - "{{vsts_workfolder}}"
+
+    - name: Fetch latest downloadurl if variable vsts_server_url is not defined
+      shell: "curl -s https://api.github.com/repos/Microsoft/vsts-agent/releases/latest | jq -r .assets[].browser_download_url | grep rhel"
+      delegate_to: localhost
+      register: githubapi_downloadurl_output
+      when: vsts_agent_fullurl is not defined    
+
+    - name: Register githubapi_downloadurl_output as fact in variable vsts_agent_fullurl
+      set_fact:
+        vsts_agent_fullurl: "{{ githubapi_downloadurl_output.stdout_lines[0] }}"
+      when: vsts_agent_fullurl is not defined           
+
+    - name: Download and unarchive
+      unarchive:
+        src: "{{vsts_agent_fullurl}}"
+        dest: "{{vsts_agentfolder}}"
+        remote_src: yes 
+        owner: "{{vsts_agent_user}}"
+        group: "{{vsts_agent_user}}"
+        creates: "{{vsts_agentfolder}}/config.sh"

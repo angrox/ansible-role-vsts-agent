@@ -1,0 +1,24 @@
+---
+- name: Check if vsts agent service already installed
+  stat: path="/etc/systemd/system/vsts.agent.{{ vsts_accountname }}.{{ vsts_agent_name }}.service" 
+  register: vsts_service_result
+  failed_when: vsts_service_result is not defined
+  ignore_errors: yes
+
+- name: Include uninstall agent tasks
+  include_tasks: uninstall_vsts_agent.yml
+  when: 
+    - vsts_service_result.stat.exists
+    - vsts_remove or vsts_reinstall
+
+- name: Include get agent files tasks
+  include_tasks: get_agent_files.yml
+  when: 
+    - not vsts_service_result.stat.exists or vsts_reinstall
+    - not vsts_remove
+
+- name: Include install agent tasks
+  include_tasks: install_vsts_agent.yml
+  when: 
+    - not vsts_service_result.stat.exists or vsts_reinstall
+    - not vsts_remove

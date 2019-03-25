@@ -1,0 +1,62 @@
+---
+- name: Install centos-release-scl-rh (CentOS only)
+  package:
+    name: centos-release-scl-rh
+    state: present
+  become: true
+  when: ansible_distribution == 'CentOS'
+
+- name: Enables SCL (RHEL only)
+  command: "yum-config-manager --enable rhel-server-rhscl-{{ ansible_distribution_major_version }}-rpms"
+  become: true
+  when: ansible_distribution == 'RedHat'
+
+- name: Install required software for vsts-agent
+  yum:
+    name: "{{item}}"
+    state: installed
+  with_items:
+    - icu
+    - libunwind
+    - rh-git29
+    - python-pip
+  become: true
+  tags:
+    - pkg
+
+- name: Pip install pexpect (we need a new-enough version that isn't packaged in redhat 7.x
+  pip:
+    name: "{{item}}"
+    state: present
+  with_items:
+    - pexpect
+  tags:
+    - pkg
+    - pexpect
+
+- name: Include configure vsts-agent tasks
+  include_tasks: configure_vsts_agent.yml
+  when: dryrun is not defined
+  tags:
+    - config
+
+- name: Initial installation of systemd service files and generation of runsvc.sh
+  command: "./svc.sh install {{vsts_agent_user}}"
+  args:
+    chdir: "{{vsts_agentfolder}}"
+    creates: "/etc/systemd/system/vsts.agent.{{ vsts_accountname }}.{{ vsts_agent_name }}.service"
+  become: true
+  when: dryrun is not defined
+  tags:
+    - config
+    - service
+
+- name: Enable and start vsts-agent service
+  service:
+    name: "vsts.agent.{{ vsts_accountname }}.{{ vsts_agent_name }}"
+    enabled: yes
+    state: started
+  become: true
+  when: dryrun is not defined
+  tags:
+    - service
